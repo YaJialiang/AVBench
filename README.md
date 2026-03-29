@@ -1,6 +1,4 @@
-<p align="center">
-	<img src="https://raw.githubusercontent.com/YaJialiang/AVBench/main/title.png" alt="AVBench Title" width="100%" />
-</p>
+![AVBench Title](./title.png)
 
 [![Hugging Face Model](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-FFD21E?style=for-the-badge)](https://huggingface.co/iiiiii123/AVBench_model)
 [![Hugging Face Leaderboard](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Leaderboard-1D9BF0?style=for-the-badge)](https://huggingface.co/spaces/iiiiii123/AVBenchLB)
