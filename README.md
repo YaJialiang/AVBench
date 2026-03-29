@@ -29,6 +29,52 @@ Open-source benchmark workspace for video/audio quality and alignment evaluation
 - `evaluation/evaluate_at_consistency.py`: Audio-text consistency evaluation.
 - `evaluation/evaluate_av_consistency.py`: Audio-video consistency evaluation.
 
+## One-Time Environment Setup
+
+Install the base runtime once:
+
+```bash
+conda create -n avbench python=3.10 -y
+conda activate avbench
+pip install -r requirements.txt
+sudo apt-get update && sudo apt-get install -y ffmpeg
+```
+
+Rule:
+- For requirements-only evaluators, this setup is enough.
+- For repo-dependent evaluators, also follow the original repo environment/model instructions in the next section.
+
+## Repo-Dependent Evaluators (Must follow original repo setup)
+
+| Script | Original Repo / Tool | What to follow | Required Model / Checkpoint |
+|---|---|---|---|
+| `evaluation/evaluate_aesthetics.py` | `discus0434/aesthetic-predictor-v2-5` | Follow original repo install instructions | Follow original repo weight setup (or install package and set `AESTHETIC_PREDICTOR_ROOT`) |
+| `evaluation/evaluate_dover.py` | `VQAssessment/DOVER` | Follow original DOVER environment setup | `DOVER_plus_plus.pth` |
+| `evaluation/evaluate_syncnet.py` | `bytedance/LatentSync` | Follow original LatentSync environment setup | `syncnet_v2.model` |
+| `evaluation/evaluate_nisqa.py` | `gabrielmittag/NISQA` | Follow original NISQA environment setup | `nisqa.tar` |
+| `evaluation/evaluate_audiobox_aesthetics.py` | `audiobox-aesthetics` (`audio-aes`) | Follow `audio-aes` installation instructions | Optional/custom Audiobox checkpoint |
+
+Environment variables for repo-dependent scripts:
+
+```bash
+export AESTHETIC_PREDICTOR_ROOT=/path/to/aesthetic-predictor-v2-5
+export DOVER_ROOT=/path/to/DOVER
+export LATENTSYNC_ROOT=/path/to/LatentSync
+export NISQA_ROOT=/path/to/NISQA
+```
+
+## Requirements-Only Evaluators
+
+The scripts below only require this repository environment (`pip install -r requirements.txt`) plus model weights:
+
+| Script | Model Source |
+|---|---|
+| `evaluation/evaluate_vt_consistency.py` | AVBench HF model (Video-Text) |
+| `evaluation/evaluate_at_consistency.py` | AVBench HF model (Audio-Text) |
+| `evaluation/evaluate_av_consistency.py` | AVBench HF model (Audio-Video) |
+| `evaluation/evaluate_DF_arena_from_videos.py` | HF model `Speech-Arena-2025/DF_Arena_1B_V_1` |
+| `evaluation/evaluate_speech_content_accuracy.py` | Whisper / transformers ASR weights |
+
 ## Model Download
 
 - [![Hugging Face Model](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-FFD21E?style=flat-square)](https://huggingface.co/iiiiii123/AVBench_model)
@@ -41,26 +87,37 @@ Open-source benchmark workspace for video/audio quality and alignment evaluation
 
 - AVBench paper: ArXiv link will be updated here once the public arXiv page is available.
 
-## Open-Source Plan
+## Primary Metric Reference (What to look at)
 
-- Full blueprint (VBench-style): [OPEN_SOURCE_BLUEPRINT.md](OPEN_SOURCE_BLUEPRINT.md)
+| Script | Main Metric(s) to Compare | Metric Meaning |
+|---|---|---|
+| `evaluation/evaluate_aesthetics.py` | `mean_score` | Higher visual aesthetic quality |
+| `evaluation/evaluate_dover.py` | `overall_score` (main), `technical_score`, `aesthetic_score` | Overall/technical/aesthetic video quality |
+| `evaluation/evaluate_syncnet.py` | `sync_score` (main), `confidence`, `offset_sec` | Lip-sync quality, confidence, and temporal offset |
+| `evaluation/evaluate_audiobox_aesthetics.py` | `avg_score` (main), `CE`, `CU`, `PC`, `PQ` | Audio aesthetics composite and sub-dimensions |
+| `evaluation/evaluate_nisqa.py` | `mos` (main) or `naturalness` (TTS mode) | Speech perceptual quality/naturalness |
+| `evaluation/evaluate_DF_arena_from_videos.py` | `avg_bonafide_score` (main), `bonafide_ratio`, `spoof_ratio` | Anti-spoofing confidence and class ratio |
+| `evaluation/evaluate_speech_content_accuracy.py` | `overall_content_score` (main), `completeness`, `accuracy`, `hallucination_score` | Content fidelity and hallucination control |
+| `evaluation/evaluate_vt_consistency.py` | `consistency_score` (per-sample), summary `average_score`, `above_05_ratio` | Video-text semantic match confidence |
+| `evaluation/evaluate_at_consistency.py` | `consistency_score` (per-sample), summary `average_score`, `above_05_ratio` | Audio-text semantic match confidence |
+| `evaluation/evaluate_av_consistency.py` | `consistency_score` (per-sample), summary `mean`, `above_05_ratio` | Audio-video match confidence |
 
-## Environment Requirements
-
-- OS: Ubuntu 20.04/22.04 (recommended)
-- Python: 3.10 (recommended)
-- CUDA: 11.8 or 12.1
-- PyTorch: 2.1+
-- Required system tool: `ffmpeg`
-
-Quick setup:
+## Minimal Run Guide
 
 ```bash
-conda create -n avbench python=3.10 -y
-conda activate avbench
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-pip install transformers accelerate tqdm numpy pandas librosa soundfile qwen-vl-utils
-sudo apt-get update && sudo apt-get install -y ffmpeg
+# requirements-only scripts
+python evaluation/evaluate_vt_consistency.py
+python evaluation/evaluate_at_consistency.py
+python evaluation/evaluate_av_consistency.py
+python evaluation/evaluate_DF_arena_from_videos.py
+python evaluation/evaluate_speech_content_accuracy.py
+
+# repo-dependent scripts
+python evaluation/evaluate_aesthetics.py
+python evaluation/evaluate_dover.py --dover-root $DOVER_ROOT
+python evaluation/evaluate_syncnet.py --latentsync-root $LATENTSYNC_ROOT
+python evaluation/evaluate_nisqa.py --nisqa-root $NISQA_ROOT
+python evaluation/evaluate_audiobox_aesthetics.py
 ```
 
 ## Video Naming Convention
@@ -77,35 +134,20 @@ video_data/my_model_v1/a13f9c2b_generated.mp4
 video_data/my_model_v1/000123_generated.mp4
 ```
 
-All scripts now:
+All scripts now default to AVBench-relative paths, auto-discover datasets under `video_data/`, and save outputs to `results/` (with CLI overrides such as `--video-root` and `--results-dir`).
 
-- Default to AVBench-relative paths.
-- Auto-discover datasets under `video_data/`.
-- Save outputs to `results/`.
-- Support CLI overrides (e.g., `--video-root`, `--results-dir`).
+## Citation (BibTeX Placeholder)
 
-## Quick Start
+BibTeX citation section will be added here after the official paper link is published.
 
-Run from repository root:
+Temporary placeholder:
 
-```bash
-python evaluation/evaluate_aesthetics.py
-python evaluation/evaluate_dover.py
-python evaluation/evaluate_syncnet.py
-python evaluation/evaluate_audiobox_aesthetics.py
-python evaluation/evaluate_nisqa.py
-python evaluation/evaluate_DF_arena_from_videos.py
-python evaluation/evaluate_speech_content_accuracy.py
-python evaluation/evaluate_vt_consistency.py
-python evaluation/evaluate_at_consistency.py
-python evaluation/evaluate_av_consistency.py
-```
-
-Example with custom paths:
-
-```bash
-python evaluation/evaluate_dover.py \
-	--video-root ./video_data \
-	--results-dir ./results \
-	--dover-root /path/to/DOVER
+```bibtex
+@misc{avbench_placeholder_2026,
+	title        = {AVBench: Audio-Visual Benchmark for Evaluation},
+	author       = {To be updated},
+	year         = {2026},
+	howpublished = {To be updated},
+	note         = {Official paper / BibTeX link will be added later}
+}
 ```

@@ -1,29 +1,22 @@
 #!/usr/bin/env python3
 """
 Extract audio from AVBench videos and run DF_Arena anti-spoofing evaluation.
-
-Recommended environment:
-    conda activate llamafactory
-    python -s evaluate_DF_arena_from_videos.py
 """
 import sys
 import os
 import argparse
 
-# 先检查环境
+# Check runtime environment first
 try:
     from transformers import pipeline
     import librosa
     import json
     from pathlib import Path
     from tqdm import tqdm
-    import tempfile
     import subprocess
 except ImportError as e:
-    print(f"导入错误: {e}")
-    print("\n请使用 llamafactory 环境并使用 -s 参数运行此脚本:")
-    print("  conda activate llamafactory")
-    print("  python -s evaluate_DF_arena_from_videos.py")
+    print(f"Import error: {e}")
+    print("\nPlease install required dependencies (transformers, librosa, tqdm) and rerun.")
     sys.exit(1)
 
 from common_paths import default_results_root, default_video_root, discover_video_dirs
@@ -38,7 +31,7 @@ def evaluate_one_dir(video_dir: str, output_path: str, pipe) -> dict:
     for ext in video_extensions:
         video_files.extend(list(Path(video_dir).glob(f"*{ext}")))
     video_files = sorted(video_files)
-    print(f"找到 {len(video_files)} 个视频文件")
+    print(f"Found {len(video_files)} video files")
 
     if not video_files:
         return {}
@@ -50,7 +43,7 @@ def evaluate_one_dir(video_dir: str, output_path: str, pipe) -> dict:
     # Collect bonafide probabilities for the average score.
     bonafide_scores = []
 
-    for idx, video_path in enumerate(tqdm(video_files, desc="处理进度")):
+    for idx, video_path in enumerate(tqdm(video_files, desc="Processing")):
         temp_audio_path = os.path.join(TEMP_AUDIO_DIR, f"{video_path.stem}.wav")
         try:
             cmd = [
@@ -61,7 +54,7 @@ def evaluate_one_dir(video_dir: str, output_path: str, pipe) -> dict:
             ]
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
-                raise Exception(f"ffmpeg提取失败: {result.stderr}")
+                raise Exception(f"ffmpeg extraction failed: {result.stderr}")
 
             audio, sr = librosa.load(temp_audio_path, sr=16000)
             detection_result = pipe(audio)
@@ -116,7 +109,7 @@ def evaluate_one_dir(video_dir: str, output_path: str, pipe) -> dict:
 
     print(f"  avg_bonafide_score: {avg_bonafide_score:.4f}  "
           f"(spoof={spoof_count}, bonafide={bonafide_count}, error={error_count}/{total})")
-    print(f"  结果已保存: {output_path}")
+    print(f"  Results saved: {output_path}")
     return summary
 
 
@@ -143,28 +136,28 @@ def main():
     video_dirs = discover_video_dirs(args.video_root)
 
     print("="*80)
-    print("DF Arena 反欺骗检测 - 多目录批量评估")
+    print("DF Arena anti-spoofing evaluation - multi-directory batch mode")
     print("="*80)
     os.makedirs(results_dir, exist_ok=True)
 
     if not video_dirs:
-        print(f"未发现可评估视频目录: {args.video_root}")
+        print(f"No evaluable video directories found under: {args.video_root}")
         return
 
-    print("\n加载 DF_Arena 模型...")
+    print("\nLoading DF_Arena model...")
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
     pipe = pipeline("antispoofing", model="Speech-Arena-2025/DF_Arena_1B_V_1",
                     trust_remote_code=True, device='cuda', local_files_only=True)
-    print("✅ 模型加载完成")
+    print("✅ Model loaded")
 
     summary_rows = []
     for label, video_dir in video_dirs:
         print(f"\n{'#'*80}")
-        print(f"# 数据集: {label}  ({video_dir})")
+        print(f"# Dataset: {label}  ({video_dir})")
         print(f"{'#'*80}")
         if not os.path.exists(video_dir):
-            print("跳过：目录不存在")
+            print("Skipping: directory does not exist")
             continue
         output_path = os.path.join(results_dir, f"df_arena_{label}.json")
         stat = evaluate_one_dir(video_dir, output_path, pipe)
@@ -186,7 +179,7 @@ def main():
         json.dump(summary_rows, f, ensure_ascii=False, indent=2)
 
     print(f"\n{'='*80}")
-    print(f"汇总结果已写入: {summary_path}")
+    print(f"Summary written to: {summary_path}")
     print(f"{'='*80}")
     for r in summary_rows:
         print(f"  {r['dataset']:20s}: avg_bonafide={r['avg_bonafide_score']:.4f}  "

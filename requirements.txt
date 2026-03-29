@@ -1,0 +1,31 @@
+# Runtime dependencies for these 5 evaluators:
+# - evaluation/evaluate_av_consistency.py
+# - evaluation/evaluate_vt_consistency.py
+# - evaluation/evaluate_at_consistency.py
+# - evaluation/evaluate_DF_arena_from_videos.py
+# - evaluation/evaluate_speech_content_accuracy.py
+
+# Core ML stack
+torch>=2.1.0
+transformers>=4.48.0
+accelerate>=0.30.0
+
+# Qwen multimodal helper
+qwen-vl-utils>=0.0.8
+
+# Audio / video processing
+librosa>=0.10.2
+soundfile>=0.12.1
+
+# Data and utilities
+numpy>=1.24.0
+pandas>=2.0.0
+tqdm>=4.66.0
+
+# ASR backend used by evaluate_speech_content_accuracy.py
+# (script can fall back to transformers ASR if whisper is unavailable)
+openai-whisper>=20240930
+
+# Common tokenizer/runtime helpers (safe to include)
+sentencepiece>=0.2.0
+protobuf>=4.25.0

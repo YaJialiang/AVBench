@@ -6,6 +6,7 @@ import csv
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import List
@@ -14,7 +15,19 @@ from PIL import Image
 import torch
 import numpy as np
 
-from aesthetic_predictor_v2_5 import convert_v2_5_from_siglip
+try:
+    from aesthetic_predictor_v2_5 import convert_v2_5_from_siglip
+except ImportError as exc:
+    ap_root = os.environ.get("AESTHETIC_PREDICTOR_ROOT")
+    if ap_root:
+        sys.path.insert(0, ap_root)
+        from aesthetic_predictor_v2_5 import convert_v2_5_from_siglip
+    else:
+        raise ImportError(
+            "Cannot import aesthetic_predictor_v2_5. "
+            "Set AESTHETIC_PREDICTOR_ROOT or install the package from "
+            "https://github.com/discus0434/aesthetic-predictor-v2-5"
+        ) from exc
 from common_paths import default_results_root, default_video_root, discover_video_dirs
 
 
@@ -76,11 +89,11 @@ def score_frames(frames: List[str], model, preprocessor, device: torch.device, b
 def evaluate_videos(video_dir: str, output_path: str, fps: float = 1.0, batch_size: int = 8):
     video_files = find_video_files(video_dir)
     if not video_files:
-        print(f"没有在 {video_dir} 中找到视频文件")
+        print(f"No videos found in {video_dir} ")
         return
 
     # load model
-    print("加载 aesthetic-predictor-v2-5 模型...")
+    print("Loading aesthetic-predictor-v2-5 model...")
     model, preprocessor = convert_v2_5_from_siglip(low_cpu_mem_usage=True, trust_remote_code=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,7 +103,7 @@ def evaluate_videos(video_dir: str, output_path: str, fps: float = 1.0, batch_si
         pass
 
     tmp_root = tempfile.mkdtemp(prefix="va_aesthetic_")
-    print(f"临时帧目录: {tmp_root}")
+    print(f"Temporary frame directory: {tmp_root}")
 
     rows = []
     try:
@@ -98,15 +111,15 @@ def evaluate_videos(video_dir: str, output_path: str, fps: float = 1.0, batch_si
             vid_id = extract_video_id(vid)
             video_tmp = os.path.join(tmp_root, vid_id)
             os.makedirs(video_tmp, exist_ok=True)
-            print(f"处理: {vid} -> 抽取帧（fps={fps}）")
+            print(f"Processing: {vid} -> extracting frames (fps={fps})")
             try:
                 frames = extract_frames(vid, video_tmp, fps=fps)
             except subprocess.CalledProcessError:
-                print(f"ffmpeg 处理失败: {vid}")
+                print(f"ffmpeg processing failed: {vid}")
                 continue
 
             if not frames:
-                print(f"未抽取到帧: {vid}")
+                print(f"No frames extracted: {vid}")
                 continue
 
             scores = score_frames(frames, model, preprocessor, device, batch_size=batch_size)
@@ -120,7 +133,7 @@ def evaluate_videos(video_dir: str, output_path: str, fps: float = 1.0, batch_si
                 "std_score": std,
             })
 
-        # 写 CSV
+        # Write CSV output.
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
         with open(output_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=["video_id", "video_path", "n_frames", "mean_score", "std_score"])
@@ -128,7 +141,7 @@ def evaluate_videos(video_dir: str, output_path: str, fps: float = 1.0, batch_si
             for r in rows:
                 writer.writerow(r)
 
-        print(f"评估完成，结果已写入 {output_path}")
+        print(f"Evaluation completed. Results saved to {output_path}")
 
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
@@ -140,7 +153,7 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--video-root", default=str(default_video_root()), help="Root directory of video datasets.")
     p.add_argument("--results-dir", default=str(default_results_root()), help="Directory to save CSV outputs.")
-    p.add_argument("--fps", type=float, default=1.0, help="每秒抽取帧数（fps）")
+    p.add_argument("--fps", type=float, default=1.0, help="Frame extraction rate (frames per second).")
     p.add_argument("--batch_size", type=int, default=8)
     return p.parse_args()
 
@@ -160,10 +173,10 @@ def main():
     summary_rows = []
     for label, video_dir in video_dirs:
         print(f"\n{'#'*60}")
-        print(f"# 数据集: {label}  ({video_dir})")
+        print(f"# Dataset: {label}  ({video_dir})")
         print(f"{'#'*60}")
         if not os.path.exists(video_dir):
-            print("跳过：目录不存在")
+            print("Skipping: directory does not exist")
             continue
         output_path = os.path.join(results_dir, f"aesthetics_{label}.csv")
         rows = evaluate_videos(video_dir, output_path, fps=fps, batch_size=batch_size)
@@ -183,7 +196,7 @@ def main():
         for r in summary_rows:
             writer.writerow(r)
     print(f"\n{'='*60}")
-    print(f"汇总结果已写入: {summary_path}")
+    print(f"Summary written to: {summary_path}")
     print(f"{'='*60}")
     for r in summary_rows:
         print(f"  {r['dataset']:20s}: n={r['n_videos']:4d}  mean={r['mean_score']:.4f}  std={r['std_score']:.4f}")

@@ -6,18 +6,17 @@ import sys
 import os
 import argparse
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Any
 from tqdm import tqdm
 import pandas as pd
 import torch
-import numpy as np
 import cv2
 
 from common_paths import default_results_root, default_video_root, discover_video_dirs
 
 
 def find_video_files(video_dir: str) -> List[str]:
-    """查找目录下的所有视频文件"""
+    """Find all video files under a directory"""
     video_extensions = ['.mp4', '.avi', '.mov', '.mkv']
     video_files = []
     
@@ -28,7 +27,7 @@ def find_video_files(video_dir: str) -> List[str]:
 
 
 def extract_video_id(video_path: str) -> str:
-    """从视频文件名中提取 ID"""
+    """Extract stable video id from a generated filename."""
     filename = Path(video_path).stem
     parts = filename.split('_')
     if len(parts) >= 2:
@@ -39,17 +38,16 @@ def extract_video_id(video_path: str) -> str:
 
 def compute_sync_score(confidence: float, offset_frames: int) -> float:
     """
-    综合唇语同步评分（0-100）
+        Compute a combined lip-sync score in [0, 100].
 
-    设计原则：
-    - 置信度高 + 偏移量小 → 分数最高
-    - 置信度高 + 偏移量大 → 分数最低（乘法耦合使高置信度更敏感于偏移）
-    - 置信度低 + 偏移量小 → 中低分
-    - 置信度低 + 偏移量大 → 低分
+        Intuition:
+        - high confidence + small offset -> high score
+        - high confidence + large offset -> low score (offset penalty is stronger)
+        - low confidence + any offset -> medium/low score
 
-    公式：
-      conf_score   = sigmoid((conf - 5.0) * 0.5)   # 置信度归一化，中心5分
-      offset_decay = exp(-|offset_frames| / 3.0)    # 偏移指数衰减，3帧≈半衰
+        Formula:
+            conf_score   = sigmoid((conf - 5.0) * 0.5)    # confidence normalization
+            offset_decay = exp(-|offset_frames| / 3.0)    # offset decay, ~half-life at 3 frames
       sync_score   = conf_score * offset_decay * 100
     """
     import math
@@ -58,53 +56,47 @@ def compute_sync_score(confidence: float, offset_frames: int) -> float:
     return round(conf_score * offset_decay * 100.0, 2)
 
 
-def evaluate_lip_sync(video_path: str, 
-                     syncnet_eval: SyncNetEval,
+def evaluate_lip_sync(video_path: str,
+                     syncnet_eval: Any,
                      temp_dir: str,
                      batch_size: int = 20,
                      vshift: int = 15) -> Dict:
-    """
-    评估单个视频的唇语同步度
-    
-    Args:
-        video_path: 视频路径
-        syncnet_eval: SyncNet评估器
-        temp_dir: 临时目录
-        batch_size: 批次大小
-        vshift: 最大偏移帧数
-        
-    Returns:
-        评估结果字典
-    """
+    """Evaluate lip-sync quality for one video."""
     try:
-        # 读取原始 fps 仅用于元数据记录，不影响评估逻辑
-        # syncnet_eval 内部抽帧时强制使用 25fps，保证与训练分布一致
+        # Source FPS is metadata only. SyncNet internally resamples to 25 FPS.
         cap = cv2.VideoCapture(video_path)
         src_fps = cap.get(cv2.CAP_PROP_FPS)
         cap.release()
         if src_fps <= 0:
             src_fps = 25.0
 
-        # 运行 SyncNet 评估
-        # evaluate() 内部：-vf fps=25 抽帧 + 固定 25fps MFCC 对齐
-        # 返回值：(offset_frames, min_dist, confidence, src_fps_read_by_syncnet)
-        offset, min_dist, conf, _ = syncnet_eval.evaluate(
+        # Compatibility:
+        # - Upstream LatentSync usually returns 3 values.
+        # - Some local forks return 4 values with extra fps metadata.
+        eval_ret = syncnet_eval.evaluate(
             video_path,
             temp_dir=temp_dir,
             batch_size=batch_size,
             vshift=vshift,
         )
 
-        # 转换为 Python 标量
+        if isinstance(eval_ret, (tuple, list)) and len(eval_ret) >= 4:
+            offset, min_dist, conf, ret_fps = eval_ret[:4]
+            if ret_fps is not None and float(ret_fps) > 0:
+                src_fps = float(ret_fps)
+        else:
+            offset, min_dist, conf = eval_ret[:3]
+
+        # Cast tensors/scalars to Python native types for serialization.
         offset   = int(offset)
         conf     = float(conf)
         min_dist = float(min_dist)
 
-        # offset_sec 固定基于 25fps（帧索引含义统一，跨模型可比）
+        # Keep offset seconds based on 25 FPS for cross-run comparability.
         EVAL_FPS  = 25.0
         offset_sec = offset / EVAL_FPS
         
-        # 评估同步质量
+        # Bucket confidence into readable quality bands.
         if conf >= 7.0:
             sync_quality = 'Excellent'
         elif conf >= 5.0:
@@ -114,7 +106,7 @@ def evaluate_lip_sync(video_path: str,
         else:
             sync_quality = 'Poor'
 
-        # 综合评分
+        # Final score combines confidence and temporal offset.
         sync_score = compute_sync_score(conf, offset)
 
         return {
@@ -148,41 +140,31 @@ def evaluate_videos(video_dir: str,
                     device: str = 'cuda',
                     batch_size: int = 20,
                     vshift: int = 15):
-    """
-    评估所有视频的唇语同步度
-    
-    Args:
-        video_dir: 视频目录
-        output_path: 输出CSV文件路径
-        syncnet_ckpt: SyncNet检查点路径
-        device: 运行设备
-        batch_size: 批次大小
-        vshift: 最大偏移帧数
-    """
+    """Evaluate lip-sync quality for all videos in a directory."""
     print("=" * 80)
-    print("SyncNet 唇语同步度评估")
+    print("SyncNet lip-sync evaluation")
     print("=" * 80)
     
-    # 查找所有视频文件
+    # Discover input videos.
     video_files = find_video_files(video_dir)
-    print(f"\n找到 {len(video_files)} 个视频文件")
+    print(f"\nFound {len(video_files)} video files")
     
     if not video_files:
-        print(f"错误: 在 {video_dir} 中未找到视频文件")
+        print(f"Error: no videos found in {video_dir}")
         return
     
     # Initialize SyncNet from a configurable LatentSync repository path.
-    print(f"\n正在初始化 SyncNet 模型...")
+    print(f"\nInitializing SyncNet model...")
     sys.path.insert(0, latentsync_root)
     from eval.syncnet.syncnet_eval import SyncNetEval
     device = torch.device(device if torch.cuda.is_available() else "cpu")
     syncnet_eval = SyncNetEval(device=device)
     
-    # 加载预训练权重
+    # Load pretrained weights when available.
     if os.path.exists(syncnet_ckpt):
         checkpoint = torch.load(syncnet_ckpt, map_location=device)
         
-        # 处理不同格式的checkpoint
+        # Support multiple checkpoint formats.
         if 'state_dict' in checkpoint:
             state_dict = checkpoint['state_dict']
         elif 'model' in checkpoint:
@@ -191,33 +173,33 @@ def evaluate_videos(video_dir: str,
             state_dict = checkpoint
         
         syncnet_eval.__S__.load_state_dict(state_dict, strict=False)
-        print(f"SyncNet 模型加载成功: {syncnet_ckpt}")
+        print(f"SyncNet model loaded: {syncnet_ckpt}")
     else:
-        print(f"警告: 未找到SyncNet权重文件: {syncnet_ckpt}")
-        print("将使用未初始化的模型（结果可能不准确）")
+        print(f"Warning: SyncNet checkpoint not found: {syncnet_ckpt}")
+        print("Using uninitialized weights; results may be inaccurate.")
     
     syncnet_eval.__S__.eval()
     
-    # 创建临时目录
+    # Create temporary workspace.
     temp_base_dir = "/tmp/syncnet_eval"
     os.makedirs(temp_base_dir, exist_ok=True)
     
-    # 评估结果
+    # Evaluation result
     results = []
     failed_videos = []
     
-    print(f"\n开始评估唇语同步度...")
-    print(f"参数: batch_size={batch_size}, vshift={vshift} 帧（偏移时间由各视频实际 FPS 决定）")
+    print(f"\nStarting lip-sync evaluation...")
+    print(f"Parameters: batch_size={batch_size}, vshift={vshift} frames")
     
-    for video_path in tqdm(video_files, desc="评估进度"):
+    for video_path in tqdm(video_files, desc="Evaluating"):
         video_id = extract_video_id(video_path)
         video_name = Path(video_path).name
         
-        # 为每个视频创建独立的临时目录
+        # Use per-video temp directories to avoid file collisions.
         temp_dir = os.path.join(temp_base_dir, video_id)
         
         try:
-            # 评估唇语同步
+            # Run lip-sync evaluation for this sample.
             result = evaluate_lip_sync(
                 video_path, 
                 syncnet_eval, 
@@ -230,9 +212,9 @@ def evaluate_videos(video_dir: str,
                 results.append({
                     'video_id': video_id,
                     'video_name': video_name,
-                    'src_fps': result['src_fps'],   # 原始帧率（模型生成质量维度）
-                    'offset_frames': result['offset_frames'],   # 基于 25fps
-                    'offset_sec': result['offset_sec'],         # 基于 25fps，跨模型可比
+                    'src_fps': result['src_fps'],        # source metadata
+                    'offset_frames': result['offset_frames'],
+                    'offset_sec': result['offset_sec'],
                     'confidence': result['confidence'],
                     'min_dist': result['min_dist'],
                     'sync_quality': result['sync_quality'],
@@ -244,17 +226,17 @@ def evaluate_videos(video_dir: str,
                     'video_name': video_name,
                     'error': result['error']
                 })
-                print(f"\n错误: 评估 {video_name} 失败: {result['error']}")
+                print(f"\nError: failed to evaluate {video_name}: {result['error']}")
             
         except Exception as e:
-            print(f"\n错误: 评估 {video_name} 失败: {str(e)}")
+            print(f"\nError: failed to evaluate {video_name}: {str(e)}")
             failed_videos.append({
                 'video_id': video_id,
                 'video_name': video_name,
                 'error': str(e)
             })
     
-    # 清理临时目录
+    # Clean temporary workspace.
     import shutil
     if os.path.exists(temp_base_dir):
         shutil.rmtree(temp_base_dir, ignore_errors=True)
@@ -263,10 +245,10 @@ def evaluate_videos(video_dir: str,
         df = pd.DataFrame(results)
         df = df.sort_values('video_id')
         df.to_csv(output_path, index=False, encoding='utf-8')
-        print(f"\n评估完成，结果已保存到: {output_path}")
+        print(f"\nEvaluation completed. Results saved to: {output_path}")
         return df
     else:
-        print("\n没有成功评估的视频")
+        print("\nNo videos were evaluated successfully")
         return pd.DataFrame()
 
 
@@ -294,16 +276,16 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     if not video_dirs:
-        print(f"未发现可评估视频目录: {args.video_root}")
+        print(f"No evaluable video directories found under: {args.video_root}")
         return
 
     summary_rows = []
     for label, video_dir in video_dirs:
         print(f"\n{'#'*80}")
-        print(f"# 数据集: {label}  ({video_dir})")
+        print(f"# Dataset: {label}  ({video_dir})")
         print(f"{'#'*80}")
         if not os.path.exists(video_dir):
-            print("跳过：目录不存在")
+            print("Skipping: directory does not exist")
             continue
         output_path = os.path.join(results_dir, f"syncnet_{label}.csv")
         df = evaluate_videos(
@@ -329,7 +311,7 @@ def main():
     summary_df = pd.DataFrame(summary_rows)
     summary_df.to_csv(summary_path, index=False)
     print(f"\n{'='*80}")
-    print(f"汇总结果已写入: {summary_path}")
+    print(f"Summary written to: {summary_path}")
     print(f"{'='*80}")
     print(summary_df.to_string(index=False))
 

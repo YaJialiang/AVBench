@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """Evaluate AVBench video audio quality with Audiobox Aesthetics metrics."""
 
-import sys
 import os
 import argparse
 from pathlib import Path
@@ -19,7 +18,7 @@ warnings.filterwarnings('ignore')
 
 
 def find_video_files(video_dir: str) -> List[str]:
-    """查找目录下的所有视频文件"""
+    """Find all video files under a directory"""
     video_extensions = ['.mp4', '.avi', '.mov', '.mkv']
     video_files = []
     
@@ -30,7 +29,7 @@ def find_video_files(video_dir: str) -> List[str]:
 
 
 def extract_video_id(video_path: str) -> str:
-    """从视频文件名中提取ID"""
+    """Extract ID from video filename"""
     filename = Path(video_path).stem
     parts = filename.split('_')
     if len(parts) >= 2:
@@ -40,27 +39,27 @@ def extract_video_id(video_path: str) -> str:
 
 def extract_audio_from_video(video_path: str, output_dir: str) -> str:
     """
-    从视频中提取音频
+    Extract audio from video
     
     Args:
-        video_path: 视频文件路径
-        output_dir: 输出目录
+        video_path: Video file path
+        output_dir: Output directory
         
     Returns:
-        提取的音频文件路径
+        Extracted audio file path
     """
     video_name = Path(video_path).stem
     audio_path = os.path.join(output_dir, f"{video_name}.wav")
     
-    # 使用 ffmpeg 提取音频
+    # Extract audio with ffmpeg
     cmd = [
         'ffmpeg',
         '-i', video_path,
-        '-vn',  # 不处理视频
-        '-acodec', 'pcm_s16le',  # 使用 PCM 编码
-        '-ar', '16000',  # 采样率 16kHz
-        '-ac', '1',  # 单声道
-        '-y',  # 覆盖已存在的文件
+        '-vn',  # Disable video stream
+        '-acodec', 'pcm_s16le',  # Use PCM codec
+        '-ar', '16000',  # Sample rate 16kHz
+        '-ac', '1',  # Mono channel
+        '-y',  # Overwrite existing file
         audio_path
     ]
     
@@ -68,37 +67,37 @@ def extract_audio_from_video(video_path: str, output_dir: str) -> str:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
         return audio_path
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"音频提取失败: {e.stderr}")
+        raise RuntimeError(f"Audio extraction failed: {e.stderr}")
 
 
 def evaluate_audio_aesthetics(audio_paths: List[str], 
                               checkpoint_path: str = None,
                               batch_size: int = 16) -> List[Dict[str, float]]:
     """
-    使用 Audiobox Aesthetics 评估音频质量
+    Evaluate audio quality with Audiobox Aesthetics
     
     Args:
-        audio_paths: 音频文件路径列表
-        checkpoint_path: 模型检查点路径
-        batch_size: 批处理大小
+        audio_paths: List of audio file paths
+        checkpoint_path: Model checkpoint path
+        batch_size: Batch size
         
     Returns:
-        评估结果列表
+        Evaluation results list
     """
-    # 创建输入文件
+    # Create input file
     with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
         input_file = f.name
         for audio_path in audio_paths:
             f.write(json.dumps({"path": audio_path}) + '\n')
     
     try:
-        # 构建命令
+        # Build command
         cmd = ['audio-aes', input_file, '--batch-size', str(batch_size)]
         
         if checkpoint_path:
             cmd.extend(['--ckpt', checkpoint_path])
         
-        # 运行评估
+        # Run evaluation
         result = subprocess.run(
             cmd, 
             check=True, 
@@ -106,7 +105,7 @@ def evaluate_audio_aesthetics(audio_paths: List[str],
             text=True
         )
         
-        # 解析输出
+        # Parse outputs
         results = []
         for line in result.stdout.strip().split('\n'):
             if line.strip():
@@ -115,7 +114,7 @@ def evaluate_audio_aesthetics(audio_paths: List[str],
         return results
         
     finally:
-        # 清理临时文件
+        # Clean temporary files
         if os.path.exists(input_file):
             os.remove(input_file)
 
@@ -126,55 +125,55 @@ def evaluate_videos(video_dir: str,
                     batch_size: int = 16,
                     keep_audio: bool = False):
     """
-    评估所有视频的音频美学质量
+    Evaluate audio aesthetics for all videos
     
     Args:
-        video_dir: 视频目录
-        output_path: 输出CSV文件路径
-        checkpoint_path: Audiobox模型检查点路径
-        batch_size: 批处理大小
-        keep_audio: 是否保留提取的音频文件
+        video_dir: Video directory
+        output_path: Output CSV path
+        checkpoint_path: AudioboxModel checkpoint path
+        batch_size: Batch size
+        keep_audio: Whether to keep extracted audio files
     """
     print("=" * 80)
-    print("Audiobox Aesthetics 音频质量评估")
+    print("Audiobox Aesthetics Audio Quality Evaluation")
     print("=" * 80)
     
     # 查找所有视频文件
     video_files = find_video_files(video_dir)
-    print(f"\n找到 {len(video_files)} 个视频文件")
+    print(f"\nFound {len(video_files)} video files")
     
     if not video_files:
-        print(f"错误: 在 {video_dir} 中未找到视频文件")
+        print(f"Error: no videos found in {video_dir}")
         return
     
-    # 创建临时目录存储音频
+    # Create temporary directory for audio
     audio_dir = tempfile.mkdtemp(prefix='va_bench_audio_')
-    print(f"\n音频提取目录: {audio_dir}")
+    print(f"\nAudio extraction directory: {audio_dir}")
     
     try:
-        # 第一步：从视频提取音频
-        print("\n步骤 1/2: 从视频提取音频...")
+        # Step 1/2: Extract audio from videos
+        print("\nStep 1/2: Extracting audio from videos...")
         audio_paths = []
         video_audio_map = {}
         
-        for video_path in tqdm(video_files, desc="提取音频"):
+        for video_path in tqdm(video_files, desc="Extract audio"):
             try:
                 audio_path = extract_audio_from_video(video_path, audio_dir)
                 audio_paths.append(audio_path)
                 video_audio_map[audio_path] = video_path
             except Exception as e:
-                print(f"\n警告: 提取 {Path(video_path).name} 音频失败: {str(e)}")
+                print(f"\nWarning: failed to extract audio from {Path(video_path).name}: {str(e)}")
         
         if not audio_paths:
-            print("错误: 没有成功提取任何音频")
+            print("Error: no audio files were extracted successfully")
             return
         
-        print(f"成功提取 {len(audio_paths)} 个音频文件")
+        print(f"Successfully extracted {len(audio_paths)} audio files")
         
-        # 第二步：评估音频美学质量
-        print(f"\n步骤 2/2: 评估音频美学质量...")
-        print(f"使用 Audiobox Aesthetics 模型...")
-        print(f"评估指标: CE(内容享受度), CU(内容有用性), PC(制作复杂度), PQ(制作质量)")
+        # Step 2/2: Evaluate audio aesthetics
+        print(f"\nStep 2/2: Evaluating audio aesthetics...")
+        print(f"Using Audiobox Aesthetics model...")
+        print(f"Metrics: CE (Content Enjoyment), CU (Content Usefulness), PC (Production Complexity), PQ (Production Quality)")
         
         aesthetics_results = evaluate_audio_aesthetics(
             audio_paths, 
@@ -182,7 +181,7 @@ def evaluate_videos(video_dir: str,
             batch_size=batch_size
         )
         
-        # 整合结果
+        # Aggregate results
         results = []
         for audio_path, aesthetics in zip(audio_paths, aesthetics_results):
             video_path = video_audio_map[audio_path]
@@ -196,7 +195,7 @@ def evaluate_videos(video_dir: str,
                 'content_usefulness': aesthetics.get('CU', None),
                 'production_complexity': aesthetics.get('PC', None),
                 'production_quality': aesthetics.get('PQ', None),
-                # 论文公式: S = (CE + CU + PQ - PC) / 4
+                # Paper formula: S = (CE + CU + PQ - PC) / 4
                 'avg_score': (
                     aesthetics.get('CE', 0)
                     + aesthetics.get('CU', 0)
@@ -205,21 +204,21 @@ def evaluate_videos(video_dir: str,
                 ) / 4
             })
         
-        # 保存结果
+        # Save results
         df = pd.DataFrame(results)
         df = df.sort_values('video_id')
         df.to_csv(output_path, index=False, encoding='utf-8')
-        print(f"\n评估完成，结果已保存到: {output_path}")
+        print(f"\nEvaluation completed. Results saved to: {output_path}")
         return df
         
     finally:
         if not keep_audio:
-            print(f"\n清理临时音频文件...")
+            print(f"\nCleaning temporary audio files...")
             import shutil
             if os.path.exists(audio_dir):
                 shutil.rmtree(audio_dir)
         else:
-            print(f"\n保留音频文件于: {audio_dir}")
+            print(f"\nKeeping audio files at: {audio_dir}")
 
 
 def parse_args():
@@ -236,14 +235,14 @@ def main():
     checkpoint_path = args.checkpoint
     video_dirs = discover_video_dirs(Path(args.video_root))
     if not os.path.exists(checkpoint_path):
-        print(f"警告: 未找到检查点 {checkpoint_path}，将使用默认模型")
+        print(f"Warning: checkpoint not found: {checkpoint_path}. Falling back to default model.")
         checkpoint_path = None
 
-    # 检查 audio-aes 命令是否可用
+    # Check whether audio-aes command is available
     try:
         subprocess.run(['audio-aes', '--help'], capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
-        print("错误: 未找到 audio-aes 命令\n请安装: pip install audiobox-aesthetics")
+        print("Error: 'audio-aes' command not found.\nInstall with: pip install audiobox-aesthetics")
         return
 
     batch_size  = args.batch_size
@@ -251,16 +250,16 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     if not video_dirs:
-        print(f"未发现可评估视频目录: {args.video_root}")
+        print(f"No evaluable video directories found under: {args.video_root}")
         return
 
     summary_rows = []
     for label, video_dir in video_dirs:
         print(f"\n{'#'*80}")
-        print(f"# 数据集: {label}  ({video_dir})")
+        print(f"# Dataset: {label}  ({video_dir})")
         print(f"{'#'*80}")
         if not os.path.exists(video_dir):
-            print("跳过：目录不存在")
+            print("Skipping: directory does not exist")
             continue
         output_path = os.path.join(results_dir, f"audiobox_{label}.csv")
         df = evaluate_videos(
@@ -286,7 +285,7 @@ def main():
     summary_df = pd.DataFrame(summary_rows)
     summary_df.to_csv(summary_path, index=False)
     print(f"\n{'='*80}")
-    print(f"汇总结果已写入: {summary_path}")
+    print(f"Summary written to: {summary_path}")
     print(f"{'='*80}")
     print(summary_df.to_string(index=False))
 

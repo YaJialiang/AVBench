@@ -4,13 +4,11 @@ import sys
 import os
 import argparse
 from pathlib import Path
-from typing import List, Dict
+from typing import List
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import warnings
-import tempfile
-import subprocess
 import torch
 import yaml
 
@@ -21,7 +19,7 @@ warnings.filterwarnings('ignore')
 
 def fuse_results(results: list):
     """
-    融合技术质量和美学质量得分
+    Fuse technical and aesthetic quality scores
     Args:
         results: [technical_score, aesthetic_score]
     Returns:
@@ -38,7 +36,7 @@ def fuse_results(results: list):
 
 
 def classify_quality(score: float) -> str:
-    """根据分数分类视频质量"""
+    """Classify video quality by score"""
     if score >= 75:
         return 'Excellent'
     elif score >= 60:
@@ -50,7 +48,7 @@ def classify_quality(score: float) -> str:
 
 
 def find_video_files(video_dir: str) -> List[str]:
-    """查找目录下的所有视频文件"""
+    """Find all video files under a directory"""
     video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv']
     video_files = []
     for ext in video_extensions:
@@ -59,9 +57,9 @@ def find_video_files(video_dir: str) -> List[str]:
 
 
 def extract_video_id(video_path: str) -> str:
-    """从视频文件名中提取ID"""
+    """Extract ID from video filename"""
     filename = Path(video_path).stem
-    # 提取 voice_XXXX 部分
+    # Extract voice_XXXX segment
     parts = filename.split('_')
     if len(parts) >= 2:
         return f"{parts[0]}_{parts[1]}"
@@ -75,25 +73,14 @@ def evaluate_videos_dover(
     dover_root: str,
     device: str = "cuda",
 ) -> pd.DataFrame:
-    """
-    使用 DOVER++ 评估视频目录中的所有视频
-    
-    Args:
-        video_dir: 视频目录路径
-        dover_config: DOVER配置文件路径
-        model_path: DOVER++模型权重路径
-        device: 运行设备 (cuda/cpu)
-    
-    Returns:
-        包含评估结果的 DataFrame
-    """
+    """Evaluate all videos in one directory with DOVER++."""
     print("=" * 60)
-    print("DOVER++ 视频质量评估")
+    print("DOVER++ Video Quality Evaluation")
     print("=" * 60)
-    print(f"视频目录: {video_dir}")
-    print(f"配置文件: {dover_config}")
-    print(f"模型权重: {model_path}")
-    print(f"运行设备: {device}")
+    print(f"Video directory: {video_dir}")
+    print(f"Config file: {dover_config}")
+    print(f"Model checkpoint: {model_path}")
+    print(f"Runtime device: {device}")
     print()
     
     # Lazy import so users can customize DOVER location.
@@ -101,31 +88,31 @@ def evaluate_videos_dover(
     from dover.datasets import ViewDecompositionDataset
     from dover.models import DOVER
 
-    # 加载配置
+    # Load config
     with open(dover_config, "r") as f:
         opt = yaml.safe_load(f)
     
-    # 加载DOVER++模型
-    print("加载 DOVER++ 模型...")
+    # Load DOVER++ model
+    print("Loading DOVER++ model...")
     evaluator = DOVER(**opt["model"]["args"]).to(device)
     checkpoint = torch.load(model_path, map_location=device)
-    # DOVER++权重文件包含state_dict键
+    # DOVER++ checkpoint may contain state_dict key
     if 'state_dict' in checkpoint:
         evaluator.load_state_dict(checkpoint['state_dict'])
     else:
         evaluator.load_state_dict(checkpoint)
     evaluator.eval()
-    print("✓ 模型加载完成\n")
+    print("✓ Model loaded\n")
     
-    # 查找视频文件
+    # Find video files
     video_files = find_video_files(video_dir)
-    print(f"找到 {len(video_files)} 个视频文件\n")
+    print(f"Found {len(video_files)} video files\n")
     
     if not video_files:
-        print("错误：未找到视频文件！")
+        print("Error: no videos found")
         return pd.DataFrame()
     
-    # 准备数据加载器
+    # Prepare dataloader
     dopt = opt["data"]["val-l1080p"]["args"].copy()
     dopt["anno_file"] = None
     dopt["data_prefix"] = video_dir
@@ -141,10 +128,10 @@ def evaluate_videos_dover(
     results_list = []
     sample_types = ["technical", "aesthetic"]
     
-    print("开始评估视频...")
-    for i, data in enumerate(tqdm(dataloader, desc="评估进度")):
+    print("Start evaluating videos...")
+    for i, data in enumerate(tqdm(dataloader, desc="Evaluating")):
         if len(data.keys()) == 1:
-            # 加载失败的数据
+            # Failed sample loading
             continue
         
         video = {}
@@ -167,10 +154,10 @@ def evaluate_videos_dover(
             raw_results = evaluator(video, reduce_scores=False)
             raw_results = [np.mean(l.cpu().numpy()) for l in raw_results]
         
-        # 融合结果
+        # Fuse results
         scores = fuse_results(raw_results)
         
-        # 提取视频信息
+        # Extract video metadata
         video_name = data["name"][0]
         video_id = extract_video_id(video_name)
         
@@ -185,24 +172,24 @@ def evaluate_videos_dover(
             'overall_grade': classify_quality(scores['overall']),
         })
     
-    # 创建DataFrame
+    # Create DataFrame
     df = pd.DataFrame(results_list)
     
-    # 打印统计信息
+    # Print statistics
     print("\n" + "=" * 60)
-    print("评估完成！")
+    print("Evaluation completed!")
     print("=" * 60)
-    print(f"总视频数: {len(df)}")
+    print(f"Total videos: {len(df)}")
     print()
     
-    print("技术质量 (VT值) 统计:")
-    print(f"  平均分: {df['technical_score'].mean():.2f}")
-    print(f"  标准差: {df['technical_score'].std():.2f}")
-    print(f"  最高分: {df['technical_score'].max():.2f} ({df.loc[df['technical_score'].idxmax(), 'video_id']})")
-    print(f"  最低分: {df['technical_score'].min():.2f} ({df.loc[df['technical_score'].idxmin(), 'video_id']})")
+    print("Technical quality (VT) statistics:")
+    print(f"  Mean score: {df['technical_score'].mean():.2f}")
+    print(f"  Std: {df['technical_score'].std():.2f}")
+    print(f"  Max score: {df['technical_score'].max():.2f} ({df.loc[df['technical_score'].idxmax(), 'video_id']})")
+    print(f"  Min score: {df['technical_score'].min():.2f} ({df.loc[df['technical_score'].idxmin(), 'video_id']})")
     print()
     
-    print("技术质量分布:")
+    print("Technical quality distribution:")
     tech_dist = df['technical_grade'].value_counts()
     for grade in ['Excellent', 'Good', 'Fair', 'Poor']:
         count = tech_dist.get(grade, 0)
@@ -210,28 +197,28 @@ def evaluate_videos_dover(
         print(f"  {grade:10s}: {count:2d} ({pct:5.1f}%)")
     print()
     
-    print("美学质量统计:")
-    print(f"  平均分: {df['aesthetic_score'].mean():.2f}")
-    print(f"  标准差: {df['aesthetic_score'].std():.2f}")
-    print(f"  最高分: {df['aesthetic_score'].max():.2f} ({df.loc[df['aesthetic_score'].idxmax(), 'video_id']})")
-    print(f"  最低分: {df['aesthetic_score'].min():.2f} ({df.loc[df['aesthetic_score'].idxmin(), 'video_id']})")
+    print("Aesthetic quality statistics:")
+    print(f"  Mean score: {df['aesthetic_score'].mean():.2f}")
+    print(f"  Std: {df['aesthetic_score'].std():.2f}")
+    print(f"  Max score: {df['aesthetic_score'].max():.2f} ({df.loc[df['aesthetic_score'].idxmax(), 'video_id']})")
+    print(f"  Min score: {df['aesthetic_score'].min():.2f} ({df.loc[df['aesthetic_score'].idxmin(), 'video_id']})")
     print()
     
-    print("整体质量统计:")
-    print(f"  平均分: {df['overall_score'].mean():.2f}")
-    print(f"  标准差: {df['overall_score'].std():.2f}")
-    print(f"  最高分: {df['overall_score'].max():.2f} ({df.loc[df['overall_score'].idxmax(), 'video_id']})")
-    print(f"  最低分: {df['overall_score'].min():.2f} ({df.loc[df['overall_score'].idxmin(), 'video_id']})")
+    print("Overall quality statistics:")
+    print(f"  Mean score: {df['overall_score'].mean():.2f}")
+    print(f"  Std: {df['overall_score'].std():.2f}")
+    print(f"  Max score: {df['overall_score'].max():.2f} ({df.loc[df['overall_score'].idxmax(), 'video_id']})")
+    print(f"  Min score: {df['overall_score'].min():.2f} ({df.loc[df['overall_score'].idxmin(), 'video_id']})")
     print()
     
-    # 分析问题视频
+    # Analyze low-quality videos
     poor_tech = df[df['technical_score'] < 45]
     if len(poor_tech) > 0:
-        print(f"技术质量较差的视频 (VT<45): {len(poor_tech)} 个")
-        print("  这些视频可能存在以下问题：")
-        print("  - 清晰度不足")
-        print("  - 锐利度较差")
-        print("  - 渲染失真或伪影")
+        print(f"Low technical quality videos (VT<45): {len(poor_tech)}")
+        print("  Potential issues for these videos:")
+        print("  - Insufficient clarity")
+        print("  - Low sharpness")
+        print("  - Rendering distortion or artifacts")
         print()
     
     return df
@@ -258,27 +245,27 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     if not video_dirs:
-        print(f"未发现可评估视频目录: {args.video_root}")
+        print(f"No evaluable video directories found under: {args.video_root}")
         return
 
     if not os.path.exists(model_path):
-        print(f"错误：找不到DOVER++模型权重文件: {model_path}")
-        print("请运行：wget https://huggingface.co/teowu/DOVER/resolve/main/DOVER_plus_plus.pth")
+        print(f"Error: DOVER++ model checkpoint not found: {model_path}")
+        print("Please download: https://huggingface.co/teowu/DOVER/resolve/main/DOVER_plus_plus.pth")
         return
 
     summary_rows = []
     for label, video_dir in video_dirs:
         print(f"\n{'#'*60}")
-        print(f"# 数据集: {label}  ({video_dir})")
+        print(f"# Dataset: {label}  ({video_dir})")
         print(f"{'#'*60}")
         if not os.path.exists(video_dir):
-            print("跳过：目录不存在")
+            print("Skipping: directory does not exist")
             continue
         df = evaluate_videos_dover(video_dir, dover_config, model_path, dover_root, device)
         if not df.empty:
             output_csv = os.path.join(results_dir, f"dover_{label}.csv")
             df.to_csv(output_csv, index=False)
-            print(f"逐视频结果已保存: {output_csv}")
+            print(f"Per-video results saved to: {output_csv}")
             summary_rows.append({
                 "dataset":        label,
                 "n_videos":       len(df),
@@ -291,7 +278,7 @@ def main():
     summary_df = pd.DataFrame(summary_rows)
     summary_df.to_csv(summary_path, index=False)
     print(f"\n{'='*60}")
-    print(f"汇总结果已写入: {summary_path}")
+    print(f"Summary written to: {summary_path}")
     print(f"{'='*60}")
     print(summary_df.to_string(index=False))
 
