@@ -1,6 +1,7 @@
 ![AVBench Title](./title.png)
 
 [![Hugging Face Model](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-FFD21E?style=for-the-badge)](https://huggingface.co/iiiiii123/AVBench_model)
+[![Hugging Face Dataset](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Dataset-FC8D62?style=for-the-badge)](https://huggingface.co/datasets/iiiiii123/AVBench)
 [![Hugging Face Leaderboard](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Leaderboard-1D9BF0?style=for-the-badge)](https://huggingface.co/spaces/iiiiii123/AVBenchLB)
 [![Project Website](https://img.shields.io/badge/%F0%9F%8C%90%20Project-Website-22A699?style=for-the-badge)](https://yajialiang.github.io/AVBench-site/)
 
@@ -75,9 +76,10 @@ The scripts below only require this repository environment (`pip install -r requ
 | `evaluation/evaluate_DF_arena_from_videos.py` | HF model `Speech-Arena-2025/DF_Arena_1B_V_1` |
 | `evaluation/evaluate_speech_content_accuracy.py` | Whisper / transformers ASR weights |
 
-## Model Download
+## Model & Dataset Download
 
 - [![Hugging Face Model](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-FFD21E?style=flat-square)](https://huggingface.co/iiiiii123/AVBench_model)
+- [![Hugging Face Dataset](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Dataset-FC8D62?style=flat-square)](https://huggingface.co/datasets/iiiiii123/AVBench)
 
 ## Hugging Face Leaderboard
 
