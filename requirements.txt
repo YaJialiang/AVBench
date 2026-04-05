@@ -6,26 +6,30 @@
 # - evaluation/evaluate_speech_content_accuracy.py
 
 # Core ML stack
-torch>=2.1.0
-transformers>=4.48.0
-accelerate>=0.30.0
+torch==2.10.0
+transformers==4.57.1
+accelerate==1.11.0
 
 # Qwen multimodal helper
-qwen-vl-utils>=0.0.8
+qwen-vl-utils==0.0.14
 
 # Audio / video processing
-librosa>=0.10.2
-soundfile>=0.12.1
+librosa==0.11.0
+soundfile==0.13.1
 
 # Data and utilities
-numpy>=1.24.0
-pandas>=2.0.0
-tqdm>=4.66.0
+numpy==2.4.3
+pandas==2.3.3
+tqdm==4.67.3
 
 # ASR backend used by evaluate_speech_content_accuracy.py
 # (script can fall back to transformers ASR if whisper is unavailable)
 openai-whisper>=20240930
 
+# System dependency (required by evaluate_DF_arena_from_videos.py and
+# evaluate_speech_content_accuracy.py for audio extraction via subprocess)
+# Please install ffmpeg from your OS package manager.
+
 # Common tokenizer/runtime helpers (safe to include)
-sentencepiece>=0.2.0
-protobuf>=4.25.0
+sentencepiece==0.2.1
+protobuf==7.34.0
