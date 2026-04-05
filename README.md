@@ -55,34 +55,6 @@ Rule:
 | `evaluation/evaluate_nisqa.py` | [gabrielmittag/NISQA](https://github.com/gabrielmittag/NISQA) | [README](https://github.com/gabrielmittag/NISQA/blob/master/README.md) | `nisqa.tar` |
 | `evaluation/evaluate_audiobox_aesthetics.py` | [audiobox-aesthetics / audio-aes](https://github.com/facebookresearch/audiobox-aesthetics) | [README](https://github.com/facebookresearch/audiobox-aesthetics/blob/main/README.md) | Optional/custom Audiobox checkpoint |
 
-Detailed external links (quick access):
-
-- Aesthetic Predictor v2.5
-	- Repo: https://github.com/discus0434/aesthetic-predictor-v2-5
-	- License: https://github.com/discus0434/aesthetic-predictor-v2-5/blob/main/LICENSE
-- DOVER / DOVER++
-	- Repo: https://github.com/VQAssessment/DOVER
-	- Checkpoint guidance: https://github.com/VQAssessment/DOVER/blob/master/README.md
-- LatentSync (SyncNet)
-	- Repo: https://github.com/bytedance/LatentSync
-	- Sync model usage: https://github.com/bytedance/LatentSync/blob/main/README.md
-- NISQA
-	- Repo: https://github.com/gabrielmittag/NISQA
-	- Model/checkpoint usage: https://github.com/gabrielmittag/NISQA/blob/master/README.md
-- Audiobox Aesthetics (audio-aes)
-	- Repo: https://github.com/facebookresearch/audiobox-aesthetics
-	- Install guide: https://github.com/facebookresearch/audiobox-aesthetics/blob/main/README.md
-
-Recommended clone commands:
-
-```bash
-git clone https://github.com/discus0434/aesthetic-predictor-v2-5.git
-git clone https://github.com/VQAssessment/DOVER.git
-git clone https://github.com/bytedance/LatentSync.git
-git clone https://github.com/gabrielmittag/NISQA.git
-git clone https://github.com/facebookresearch/audiobox-aesthetics.git
-```
-
 Environment variables for repo-dependent scripts:
 
 ```bash
