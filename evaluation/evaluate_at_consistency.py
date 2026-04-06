@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument(
         "--model-path",
         type=str,
-        default="/public/yangjl/LlamaFactory/saves/Qwen2-Audio-7B/full/train_2026-02-18-10-18-08",
+        default="/public/yangjl/Qwen2-Audio-7B-AudioTextMatching-Merged",
         help="Model path or HF snapshot directory.",
     )
     parser.add_argument(
@@ -127,8 +127,8 @@ class AudioTextConsistencyScorer:
         try:
             audio, _ = librosa.load(audio_path, sr=16000)
             text_input = (
-                "<|audio_bos|><|AUDIO|><|audio_eos|>\\n"
-                f"Audio Description: {text_prompt}\\n\\n"
+                "<|audio_bos|><|AUDIO|><|audio_eos|>\n"
+                f"Audio Description: {text_prompt}\n\n"
                 "Does this audio description accurately match the audio content? "
                 "Answer only Yes or No."
             )
@@ -210,7 +210,7 @@ def main():
         utterance = item.get("utterance", "")
 
         if utterance:
-            text_prompt = f'Audio Observation: {prompt_audio} Speech Content: "{utterance}"'
+            text_prompt = f'Audio Observation: {prompt_audio}  Speech Content: "{utterance}"'
         else:
             text_prompt = prompt_audio
 

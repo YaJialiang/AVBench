@@ -45,6 +45,15 @@ Rule:
 - For requirements-only evaluators, this setup is enough.
 - For repo-dependent evaluators, also follow the original repo environment/model instructions in the next section.
 
+Recommended for robust VT/AV runtime:
+
+```bash
+pip install -U decord
+export FORCE_QWENVL_VIDEO_READER=decord
+```
+
+This avoids common `torchvision.io.read_video` backend issues in multimodal video loading.
+
 ## Repo-Dependent Evaluators (Must follow original repo setup)
 
 | Script | Original Repo / Tool | Setup Docs | Required Model / Checkpoint |
@@ -137,6 +146,21 @@ video_data/my_model_v1/000123_generated.mp4
 ```
 
 All scripts now default to AVBench-relative paths, auto-discover datasets under `video_data/`, and save outputs to `results/` (with CLI overrides such as `--video-root` and `--results-dir`).
+
+## Alignment Checklist (Important)
+
+Before running consistency evaluation, ensure dataset items and generated videos are aligned:
+
+- Use a dataset JSON whose identifiers correspond to your generated videos.
+- Keep filename convention strictly as `<sample_id>_<model_suffix>.mp4`.
+- Ensure `--model-suffix` matches the real suffix in your video filenames.
+- If your generator uses hashed names (or any non-default id scheme), ensure `video_file`/`id` in dataset points to the same sample identity.
+- If ids are not aligned, metrics can drop sharply because prompts and videos become mismatched (evaluation still runs, but scores are not meaningful).
+
+Quick pre-check suggestions:
+
+- Count evaluable samples from script output: `Evaluable: X | Skipped: Y`.
+- If `Skipped` is unexpectedly high or score distribution is abnormally low, check id-to-video alignment first.
 
 ## Citation (BibTeX Placeholder)
 
