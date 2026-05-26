@@ -164,16 +164,14 @@ Quick pre-check suggestions:
 
 ## Citation (BibTeX Placeholder)
 
-BibTeX citation section will be added here after the official paper link is published.
-
-Temporary placeholder:
-
 ```bibtex
-@misc{avbench_placeholder_2026,
-	title        = {AVBench: Audio-Visual Benchmark for Evaluation},
-	author       = {To be updated},
-	year         = {2026},
-	howpublished = {To be updated},
-	note         = {Official paper / BibTeX link will be added later}
+@misc{yang2026avbenchhumanalignedautomatedevaluation,
+      title={AVBench: Human-Aligned and Automated Evaluation Benchmark for Audio-Video Generative Models}, 
+      author={Jialiang Yang and Bin Xia and Ruihang Chu and Dingdong Wang and Wanke Xia and Zhun Mou and Tianyang Zhong and Yiting Zhao and Wenming Yang},
+      year={2026},
+      eprint={2605.24652},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2605.24652}, 
 }
 ```
